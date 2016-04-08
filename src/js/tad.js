@@ -306,6 +306,7 @@
 	var t = window.TadSdk = {
 		m_sdk_ver : '3.12.6'
 	};
+	var timer = null;
 	//t.ua = navigator.userAgent.toLowerCase();
 	t.ua = navigator.userAgent;
 	t.isAndroid = (t.ua.toLowerCase().indexOf('android') > 0) ? true : false;
@@ -332,8 +333,7 @@
 	// policy 정책 서버 url 추가.2015.07.22.uyuni
 	t.adPolicyUrl = 'http://gw.adotsolution.com:14000/polmngr/getpolicy.json';
 	t.adLogUrl = 'http://event.adotsolution.com:16000/mweblog';
-	t.adLogUrl = 'http://event.adotsolution.com:16000/logger';
-	t.testUrl = {'adRequestUrl' : 'http://ad-dev.adotsolution.com:15000/mweb/ad_request', 'adPolicyUrl' : 'http://dcd-dev.adotsolution.com/polmngr/getpolicy.json', 'adLogUrl' : 'http://event-dev.adotsolution.com:16000/logger', 'creativeHost':['http://adddn.adotsolution.com', 'http://dcd.adotsolution.com', 'http://contents.adotsolution.com:8080', 'http://dcd-dev.adotsolution.com', 'http://dev.adotsolution.com']};
+	t.testUrl = {'adRequestUrl' : 'http://ad-dev.adotsolution.com:15000/mweb/ad_request', 'adPolicyUrl' : 'http://dcd-dev.adotsolution.com/polmngr/getpolicy.json', 'adLogUrl' : 'http://event-dev.adotsolution.com:16000/mweblog', 'creativeHost':['http://adddn.adotsolution.com', 'http://dcd.adotsolution.com', 'http://contents.adotsolution.com:8080', 'http://dcd-dev.adotsolution.com', 'http://dev.adotsolution.com']};
 	//t.testUrl = {'adRequestUrl' : 'http://addev.duckdns.org/tad/delivery/150317/request.php', 'adLogUrl' : 'http://event-dev.adotsolution.com:16000/mweblog'};
 	// postMessage 응답시 외부 host로 부터 응답받지 않기 위해 처리 host 명시.2015.04.15.uyuni
 	// 'http://contents.adotsolution.com:8080'은 하우스배너를 위해 추가
@@ -369,6 +369,7 @@
 		302 : 'Wrong Slot Number.',
 		500 : 'Internal error.'
 	};
+
 	// d_resolution값 추가.2015.08.25.uyuni
 	t.commonParam = ['m_sdk_ver', 'd_model', 'd_os_name', 'd_os_ver', 'd_locale', 'd_resolution', 'callback'];
 	// cache문제로 request 줄어드는 문제 수정을 위해 dummy값 추가(imp포함).2015.01.23.uyuni
@@ -376,11 +377,8 @@
 	t.adRequestParam = ['adNo', 'm_client_id', 'm_slot', 'm_sdk_ver', 'm_iframe', 'd_model', 'd_os_name', 'd_os_ver', 'd_locale', 'd_resolution', 'callback', 'u_age', 'u_gender', 'u_network_operator','c_uid','dummy'];
 	// 여러개의 상품이 나오는 re-targeting 광고의 경우 어떤 상품이 노출/클릭되었는지 체크를 위해 x_products 추가.2015.01.08.uyuni
 	// d_resolution값 추가(검증용).2015.08.26.uyuni
-	// rid 기반 log 규격 변경으로 인해 새로 정의.2016.04.04.uyuni
-	//t.adLogParam = ['m_client_id', 'm_slot', 'm_sdk_ver', 'k_event', 'd_uid', 'x_bypass', 'd_model', 'd_os_name', 'd_os_ver', 'd_resolution', 'u_age', 'u_gender', 'u_network_operator', 'x_products','x_tracking_url','dummy'];
-	t.adLogParam = ['x_rid', 'k_event', 'x_products', 'x_tracking_url'];
+	t.adLogParam = ['m_client_id', 'm_slot', 'm_sdk_ver', 'k_event', 'd_uid', 'x_bypass', 'd_model', 'd_os_name', 'd_os_ver', 'd_resolution', 'u_age', 'u_gender', 'u_network_operator', 'x_products','x_tracking_url','dummy'];
 	t.adClickLogParam = ['adNo', 'm_client_id', 'k_event', 'm_slot', 'm_sdk_ver', 'd_uid', 'x_bypass', 'd_model', 'd_os_name', 'd_os_ver', 'u_age', 'u_gender', 'u_network_operator', 'k_blank', 'x_products','x_redirect_url','x_tracking_url'];
-	t.adClickLogParam2 = ['x_rid', 'k_event', 'x_products', 'x_tracking_url', 'x_redirect_url'];
 	// policy 정책 서버 url 추가.2015.07.22.uyuni
 	t.adPolicyParam = ['adNo', 'callback', 'm_client_id', 'm_slot', 'm_sdk_ver', 'd_uid'];
 	t.addedListeners = [];
@@ -515,6 +513,9 @@
 					t.consoleMode = false;
 				}
 			}
+			//<<
+			t.configure[adNo].m_isViwibleOnScroll = (typeof config.inVisibleOnScroll == 'boolean' && config.inVisibleOnScroll === true) ? true : false;
+			//>>
 
 				// ios/webview 3rd cookie error.2014.08.20.uyuni
 				// log전송시 d_uid값 빈값전송에 따른 c_uid값으로 변경.2014.08.22.uyuni
@@ -1219,6 +1220,12 @@
 					this.viewAdLog(adNo);
 					floatingTargetEl.appendChild(wrapEl);
 
+					// 개발자가 invisibleOnScroll을 설정한경우 EventListener를 등록한다. 
+					this.addScrollEvent(adNo, 'inVisibleOnScroll');	
+					if(t.configure[adNo].inVisibleOnScroll) {
+						
+					}
+					
 					break;
 
 				// interstitial 확인 필요 2014.09.01.uyuni
@@ -1382,9 +1389,7 @@
 			if(t.adInfo[adNo].x_imp_tracking_url) {
 				logInfo.x_tracking_url = t.adInfo[adNo].x_imp_tracking_url;
 			}
-
-			//var logConfig = t.Util.merge2Object(t.Util.merge2Object(t.adInfo[adNo], t.configure[adNo]), logInfo);
-			var logConfig = t.Util.merge2Object(t.adInfo[adNo], logInfo);
+			var logConfig = t.Util.merge2Object(t.Util.merge2Object(t.adInfo[adNo], t.configure[adNo]), logInfo);
 			var param = t.Util.configToParam(logConfig, t.adLogParam);
 			var url = (t.adLogUrl.indexOf('?') > -1) ? t.adLogUrl + '&' : t.adLogUrl + '?';
 			url += param;
@@ -1400,9 +1405,8 @@
 		clickAdLog : function(adNo, eCode) {
 			if(!eCode) eCode = 1;
 			var logInfo = {'k_event':eCode};
-			//var logConfig = t.Util.merge2Object(t.Util.merge2Object(t.adInfo[adNo], t.configure[adNo]), logInfo);
-			var logConfig = t.Util.merge2Object(t.adInfo[adNo], logInfo);
-			var param = t.Util.configToParam(logConfig, t.adClickLogParam2);
+			var logConfig = t.Util.merge2Object(t.Util.merge2Object(t.adInfo[adNo], t.configure[adNo]), logInfo);
+			var param = t.Util.configToParam(logConfig, t.adClickLogParam);
 			var url = (t.adLogUrl.indexOf('?') > -1) ? t.adLogUrl + '&' : t.adLogUrl + '?';
 			url += param;
 			this.sendLogIfrm(adNo, url);
@@ -1425,9 +1429,8 @@
 		 */
 		clickAdLogIfrm2 : function(adNo, action) {
 			var logInfo = {'k_event':1};
-			//var logConfig = t.Util.merge2Object(t.Util.merge2Object(t.adInfo[adNo], t.configure[adNo]), logInfo);
-			var logConfig = t.Util.merge2Object(t.adInfo[adNo], logInfo);
-			var param = t.Util.configToParam(logConfig, t.adClickLogParam2);
+			var logConfig = t.Util.merge2Object(t.Util.merge2Object(t.adInfo[adNo], t.configure[adNo]), logInfo);
+			var param = t.Util.configToParam(logConfig, t.adClickLogParam);
 			var url = (t.adLogUrl.indexOf('?') > -1) ? t.adLogUrl + '&' : t.adLogUrl + '?';
 			url += param;
 			var ifrmEl = document.createElement('IFRAME');
@@ -1451,6 +1454,7 @@
 			t.Util.addEvent(window, 'message', this.onMessage.bind(this));
 		},
 		addScrollEvent : function(adNo, type) {
+			t.Util.logHandler('addScrollEvent');
 			switch(type) {
 				case 'scrollTop' :
 				case 'scrollTopCopy' :
@@ -1468,6 +1472,12 @@
 					t.Util.addEvent(window, 'scroll', function(){ t.AdView.onScrollView(adNo); });
 					t.AdView.onScrollView(adNo);
 					break;
+				case 'inVisibleOnScroll' :
+					// t.Util.addEvent(window, 'touchmove', function(){ t.AdView.inVisibleOnScrollViewMove(adNo); });
+					t.Util.addEvent(window, 'scroll', function(){ t.AdView.inVisibleOnScrollViewScroll(adNo); });
+					// t.Util.addEvent(window, 'touchend', function(){ t.AdView.visibleOnScrollView(adNo); });
+				break;
+
 				default :
 			}
 		},
@@ -1541,7 +1551,6 @@
 				// DC인사이드 손실률 50% 현상으로 인해 imp.위치 수정.2015.06.11.uyuni
 				t.AdView.viewAdLog(adNo);
 
-
 				// imp frequency 설정시.2015.06.25.uyuni
 				// if(t.configure[adNo].frequency && t.configure[adNo].frequency.hasOwnProperty('imp')) {
 				// frequency 설정만 있다면 무조건 저장(고M과 협의완료).2015.08.06.uyuni
@@ -1554,6 +1563,33 @@
 				t.AdView.addPageShowHideEvent();
 			}
 		},
+
+		// inVisibleOnScrollViewMove : function(adNo) {
+		// 	t.Util.logHandler('inVisibleOnScrollViewMove');
+		// 	document.getElementById('floating' + 'Wrap_' + adNo).style.visibility = "hidden";
+		// },
+
+		
+		inVisibleOnScrollViewScroll : function(adNo) {
+			t.Util.logHandler('inVisibleOnScrollViewScroll');
+
+			document.getElementById('floating' + 'Wrap_' + adNo).style.visibility = "hidden";
+ 			
+ 			if(timer !== null) {
+        		clearTimeout(timer);        
+    		}
+
+    		timer = setTimeout(function() {
+				document.getElementById('floating' + 'Wrap_' + adNo).style.visibility = "visible";
+
+			}, 150);
+		},
+
+		// visibleOnScrollView : function(adNo) {
+		// 	t.Util.logHandler('visibleOnScrollView');
+		// 	document.getElementById('floating' + 'Wrap_' + adNo).style.visibility = "visible";
+		// },
+
 		/**
 		 *
 		 *
@@ -2117,13 +2153,12 @@
 			}
 			*/
 
-			//var logConfig = t.Util.merge2Object(t.Util.merge2Object(t.adInfo[adNo], t.configure[adNo]), logInfo);
-			var logConfig = t.Util.merge2Object(t.adInfo[adNo], logInfo);
+			var logConfig = t.Util.merge2Object(t.Util.merge2Object(t.adInfo[adNo], t.configure[adNo]), logInfo);
 			// mable clk 처리로직을 추가.2015.06.02.uyuni
 			if(t.adInfo[adNo].x_clk_tracking_url) {
 				logConfig.x_tracking_url = t.adInfo[adNo].x_clk_tracking_url;
 			}
-			var param = t.Util.configToParam(logConfig, t.adClickLogParam2);
+			var param = t.Util.configToParam(logConfig, t.adClickLogParam);
 			var url = (t.adLogUrl.indexOf('?') > -1) ? t.adLogUrl + '&' : t.adLogUrl + '?';
 			url += param;
 
